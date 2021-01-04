@@ -16,10 +16,10 @@ resource "aws_iam_role" "peter-sftp-service-role" {
     {
       "Action": "sts:AssumeRole",
       "Principal": {
-        "Service": "ec2.amazonaws.com"
+        "Service": "transfer.amazonaws.com"
       },
       "Effect": "Allow",
-      "Sid": "EC2Allow"
+      "Sid": "AllowTransfer"
     }
   ]
 }
@@ -36,11 +36,10 @@ resource "aws_iam_policy" "peter-sftp-service-policy" {
       "Action": [
         "s3:List*",
         "s3:Get*",
-        "logs:CreateLogStream",
-        "logs:PutLogEvents"
+        "s3:Put*"
       ],
       "Effect": "Allow",
-      "Resource": "*"
+      "Resource": ["arn:aws:s3:::peterkang-sftp-bucket", "arn:aws:s3:::peterkang-sftp-bucket/*"]
     }
   ]
 }

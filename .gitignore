@@ -3,3 +3,8 @@ terraform.tfstate
 terraform.tfstate.backup
 terraform.tfvars
 .DS_Store
+service2/sftp.pub
+service2/output.tf
+service/terraform.tfvars
+service2/terraform.tfvars
+service3/terraform.tfvars

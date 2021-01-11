@@ -1,17 +1,11 @@
-# sftp
+# AWS SFTP Services
 
-Existing resources:
-1. VPC
-2. Subnets
+Service 1:  EC2 service with SFTP configuration
+    - Needs automation/ userdata scripting
 
-Resources needed:
+Service 2:  Transfer Family service with public IP
+    - Needs Route 53 mapping to Public endpoint
 
-1. Linux EC2 Server
-2. EC2 Security Group
-    a. port 22 for SFTP(change for later?)
-3. IAM Role
-    a. Read, Put to S3
-4. Route 53 for DNS entry/ public IP address
-5. S3
-    a. Needs S3 DATA storage bucket, interacts with S3 service
-    b. Needs S3 LOG bucket, stores activity of Data bucket
+Service 3:  Transfer Family service with VPC endpoint using Private Link
+    - VPC endpoint setup using PrivateLink
+    - Needs multiple user configuration

@@ -11,4 +11,4 @@ variable "S3_BUCKET_NAME" {}
 variable "S3_BUCKET_ARN" {}
 variable "S3_BUCKET_OBJECT_ARN" {}
 variable "TRANSFER_SERVER_NAME" {}
-variable "TRANSFER_SERVER_USERNAME" {}
+variable "TRANSFER_SERVER_USERS" {}

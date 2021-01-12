@@ -73,19 +73,20 @@ resource "aws_transfer_server" "transfer_server" {
   }
 }
 
-resource "aws_transfer_user" "transfer_server_user" {
+resource "aws_transfer_user" "transfer_server_users" {
+  count          = length(var.TRANSFER_SERVER_USERS)
   server_id      = aws_transfer_server.transfer_server.id
-  user_name      = var.TRANSFER_SERVER_USERNAME
+  user_name      = var.TRANSFER_SERVER_USERS[count.index]
+  home_directory = "/${var.S3_BUCKET_NAME}/${var.TRANSFER_SERVER_USERS[count.index]}"
   role           = aws_iam_role.transfer_server_role.arn
-  home_directory = "/${var.S3_BUCKET_NAME}"
 }
 
 resource "aws_transfer_ssh_key" "transfer_server_ssh_key" {
+  count     = length(var.TRANSFER_SERVER_USERS)
   server_id = aws_transfer_server.transfer_server.id
-  user_name = aws_transfer_user.transfer_server_user.user_name
+  user_name = aws_transfer_user.transfer_server_users[count.index].user_name
   body      = file("sftp.pub")
 }
-
 
 # Route 53
 resource "aws_route53_zone" "peter_sftp_zone" {

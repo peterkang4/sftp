@@ -8,3 +8,4 @@ service2/output.tf
 service/terraform.tfvars
 service2/terraform.tfvars
 service3/terraform.tfvars
+service3/sftp.pub

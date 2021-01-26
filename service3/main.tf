@@ -44,6 +44,28 @@ data "aws_iam_policy_document" "transfer_server_to_cloudwatch_assume_policy" {
   }
 }
 
+resource "aws_security_group" "sftp_securitygroup" {
+  name          = "sftp_securitygroup"
+  vpc_id        = var.VPC_ID
+  ingress {
+    protocol    = "tcp"
+    from_port   = 22
+    to_port     = 22
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress {
+    protocol    = "tcp"
+    from_port   = 22
+    to_port     = 22
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags          = {
+    Project     = "Peter-Quest-TF"
+  }
+}
+
 resource "aws_iam_role" "transfer_server_role" {
   name               = "${var.TRANSFER_SERVER_NAME}-transfer_server_role"
   assume_role_policy = data.aws_iam_policy_document.transfer_server_assume_role.json
@@ -66,13 +88,53 @@ resource "aws_iam_role_policy" "transfer_server_to_cloudwatch_policy" {
 
 # SFTP Server
 resource "aws_transfer_server" "transfer_server" {
-  identity_provider_type = "SERVICE_MANAGED"
+  identity_provider_type = var.SFTP_IDENTITY_PROVIDER_TYPE
   logging_role           = aws_iam_role.transfer_server_role.arn
-  endpoint_type          = "PUBLIC"
+  endpoint_type          = "VPC"
+  # endpoint_type          = "VPC_ENDPOINT"
+
+  endpoint_details {
+    #vpc_endpoint_id      = aws_vpc_endpoint.sftp_server_interface_endpoint.id
+    address_allocation_ids = [ aws_eip.sftp_eip1.id, aws_eip.sftp_eip2.id]
+    subnet_ids = [ var.SUBNET1, var.SUBNET2 ]
+    vpc_id = var.VPC_ID
+  }
   tags                   = {
     Project              = "peter-sftp-tf"
+    Name                 = "peter-sftp"
   }
 }
+
+
+# EIP
+resource "aws_eip" "sftp_eip1" {
+  vpc       = true
+  tags      = {
+    Project = "peter-sftp-tf"
+    Name    = "sftp_eip1"
+  }
+}
+
+resource "aws_eip" "sftp_eip2" {
+  vpc       = true
+  tags      = {
+    Project = "peter-sftp-tf"
+    Name    = "sftp_eip2"
+  }
+}
+
+# SFTP Server's Interface Endpoint
+# resource "aws_vpc_endpoint" "sftp_server_interface_endpoint" {
+#   vpc_id              = var.VPC_ID
+#   service_name        = "com.amazonaws.us-east-1.transfer.server"
+#   vpc_endpoint_type   = "Interface"
+#   private_dns_enabled = true
+#   subnet_ids          = [ var.SUBNET1, var.SUBNET2 ]
+#   security_group_ids  = [ aws_security_group.sftp_securitygroup.id ]
+#   tags                = {
+#     Project           = "peter-sftp-tf"
+#   }
+# }
 
 resource "aws_transfer_user" "transfer_server_users" {
   count          = length(var.TRANSFER_SERVER_USERS)
@@ -104,3 +166,77 @@ resource "aws_route53_record" "cname-record" {
   ttl     = "300"
   records = [ aws_transfer_server.transfer_server.endpoint ]
 }
+
+
+# NLB
+resource "aws_lb" "sftp_nlb" {
+  name               = "sftp-nlb"
+  internal           = false
+  load_balancer_type = "network"
+  enable_deletion_protection = false
+  subnets            = [ var.SUBNET1, var.SUBNET2 ]
+  tags = {
+    Project          = "peter-sftp-tf"
+  }
+}
+
+resource "aws_lb_target_group" "nlb_target_group" {
+  name        = "nlb-target-group"
+  port        = 22
+  protocol    = "TCP"
+  target_type = "ip"
+  vpc_id      = var.VPC_ID
+
+  # health_check {
+  #   interval            = 10
+  #   path                = "/"
+  #   healthy_threshold   = 2
+  #   unhealthy_threshold = 2
+  #   timeout             = 5
+  # }
+}
+
+
+
+resource "aws_lb_listener" "nlb_listener" {
+  load_balancer_arn  = aws_lb.sftp_nlb.arn
+  port               = "22"
+  protocol           = "TCP"
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.nlb_target_group.arn
+  }
+}
+
+
+
+# resource "aws_lb_listener_rule" "nlb_listener_rule" {
+#   listener_arn       = aws_lb_listener.nlb_listener.arn
+#   priority           = 1
+#   action {
+#     type             = "forward"
+#     target_group_arn = aws_lb_target_group.nlb_target_group.arn
+#   }
+#   condition {
+#     path_pattern {
+#       values         = ["*"]
+#     }
+#   }
+# }
+
+
+
+# resource "aws_lb_target_group_attachment" "nlb_tg1_public_attachment" {
+#   target_group_arn = aws_lb_target_group.nlb_target_group.arn
+#   target_id        = aws_eip.sftp_eip1.public_ip
+# }
+
+# resource "aws_lb_target_group_attachment" "nlb_tg1_private_attachment" {
+#   target_group_arn = aws_lb_target_group.nlb_target_group.arn
+#   target_id        = aws_eip.sftp_eip1.private_ip
+# }
+
+# resource "aws_lb_target_group_attachment" "nlb_tg2_attachment" {
+#   target_group_arn = aws_lb_target_group.nlb_target_group.arn
+#   target_id        = aws_eip.sftp_eip2.id
+# }

@@ -7,6 +7,8 @@ variable "SUBNET1" {}
 variable "SUBNET2" {}
 variable "AZ1" {}
 variable "AZ2" {}
+variable "PRIVATE_IP1" {}
+variable "PRIVATE_IP2" {}
 variable "S3_BUCKET_NAME" {}
 variable "S3_BUCKET_ARN" {}
 variable "S3_BUCKET_OBJECT_ARN" {}

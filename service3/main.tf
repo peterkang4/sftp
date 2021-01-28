@@ -62,7 +62,7 @@ resource "aws_security_group" "sftp_securitygroup" {
   }
 
   tags          = {
-    Project     = "Peter-Quest-TF"
+    Project     = "peter-sftp-tf"
   }
 }
 
@@ -91,35 +91,18 @@ resource "aws_transfer_server" "transfer_server" {
   identity_provider_type = var.SFTP_IDENTITY_PROVIDER_TYPE
   logging_role           = aws_iam_role.transfer_server_role.arn
   endpoint_type          = "VPC"
-  # endpoint_type          = "VPC_ENDPOINT"
+  #endpoint_type          = "VPC_ENDPOINT"
 
   endpoint_details {
-    #vpc_endpoint_id      = aws_vpc_endpoint.sftp_server_interface_endpoint.id
     address_allocation_ids = [ aws_eip.sftp_eip1.id, aws_eip.sftp_eip2.id]
-    subnet_ids = [ var.SUBNET1, var.SUBNET2 ]
-    vpc_id = var.VPC_ID
+    subnet_ids             = [ var.SUBNET1, var.SUBNET2 ]
+    vpc_id                 = var.VPC_ID
+  #security_group_ids     = [ aws_security_group.sftp_securitygroup.id ]
+  #vpc_endpoint_id      = aws_vpc_endpoint.sftp_server_interface_endpoint.id
   }
-  tags                   = {
-    Project              = "peter-sftp-tf"
-    Name                 = "peter-sftp"
-  }
-}
-
-
-# EIP
-resource "aws_eip" "sftp_eip1" {
-  vpc       = true
-  tags      = {
-    Project = "peter-sftp-tf"
-    Name    = "sftp_eip1"
-  }
-}
-
-resource "aws_eip" "sftp_eip2" {
-  vpc       = true
-  tags      = {
-    Project = "peter-sftp-tf"
-    Name    = "sftp_eip2"
+  tags                     = {
+    Project                = "peter-sftp-tf"
+    Name                   = "peter-sftp"
   }
 }
 
@@ -164,7 +147,7 @@ resource "aws_route53_record" "cname-record" {
   name    = "test"
   type    = "CNAME"
   ttl     = "300"
-  records = [ aws_transfer_server.transfer_server.endpoint ]
+  records = [ aws_eip.sftp_eip1.public_ip, aws_eip.sftp_eip2.public_ip ]
 }
 
 
@@ -186,17 +169,8 @@ resource "aws_lb_target_group" "nlb_target_group" {
   protocol    = "TCP"
   target_type = "ip"
   vpc_id      = var.VPC_ID
-
-  # health_check {
-  #   interval            = 10
-  #   path                = "/"
-  #   healthy_threshold   = 2
-  #   unhealthy_threshold = 2
-  #   timeout             = 5
-  # }
+  deregistration_delay = 3600
 }
-
-
 
 resource "aws_lb_listener" "nlb_listener" {
   load_balancer_arn  = aws_lb.sftp_nlb.arn
@@ -208,35 +182,53 @@ resource "aws_lb_listener" "nlb_listener" {
   }
 }
 
+# ENI
+resource "aws_network_interface" "eni1" {
+  subnet_id       = var.SUBNET1
+  private_ips     = [ var.PRIVATE_IP1 ]
+  security_groups = [ aws_security_group.sftp_securitygroup.id ]
+  tags            = {
+    Project       = "peter-sftp-tf"
+    Name          = "sftp-eni1"
+  }
+}
+
+resource "aws_network_interface" "eni2" {
+  subnet_id       = var.SUBNET2
+  private_ips     = [ var.PRIVATE_IP2 ]
+  security_groups = [ aws_security_group.sftp_securitygroup.id ]
+  tags            = {
+    Project       = "peter-sftp-tf"
+    Name          = "sftp-eni2"
+  }
+}
 
 
-# resource "aws_lb_listener_rule" "nlb_listener_rule" {
-#   listener_arn       = aws_lb_listener.nlb_listener.arn
-#   priority           = 1
-#   action {
-#     type             = "forward"
-#     target_group_arn = aws_lb_target_group.nlb_target_group.arn
-#   }
-#   condition {
-#     path_pattern {
-#       values         = ["*"]
-#     }
-#   }
-# }
+# EIP
+resource "aws_eip" "sftp_eip1" {
+  vpc                       = true
+  associate_with_private_ip = var.PRIVATE_IP1
+  tags                      = {
+    Project                 = "peter-sftp-tf"
+    Name                    = "sftp_eip1"
+  }
+}
 
+resource "aws_eip" "sftp_eip2" {
+  vpc       = true
+  associate_with_private_ip = var.PRIVATE_IP2
+  tags      = {
+    Project = "peter-sftp-tf"
+    Name    = "sftp_eip2"
+  }
+}
 
+resource "aws_lb_target_group_attachment" "nlb_tg1_private_attachment" {
+  target_group_arn = aws_lb_target_group.nlb_target_group.arn
+  target_id        = var.PRIVATE_IP1
+}
 
-# resource "aws_lb_target_group_attachment" "nlb_tg1_public_attachment" {
-#   target_group_arn = aws_lb_target_group.nlb_target_group.arn
-#   target_id        = aws_eip.sftp_eip1.public_ip
-# }
-
-# resource "aws_lb_target_group_attachment" "nlb_tg1_private_attachment" {
-#   target_group_arn = aws_lb_target_group.nlb_target_group.arn
-#   target_id        = aws_eip.sftp_eip1.private_ip
-# }
-
-# resource "aws_lb_target_group_attachment" "nlb_tg2_attachment" {
-#   target_group_arn = aws_lb_target_group.nlb_target_group.arn
-#   target_id        = aws_eip.sftp_eip2.id
-# }
+resource "aws_lb_target_group_attachment" "nlb_tg2_private_attachment" {
+  target_group_arn = aws_lb_target_group.nlb_target_group.arn
+  target_id        = var.PRIVATE_IP2
+}

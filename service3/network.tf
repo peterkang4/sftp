@@ -95,7 +95,7 @@ resource "aws_route53_record" "cname-record" {
   name    = "test"
   type    = "CNAME"
   ttl     = "300"
-  records = [ aws_lb.sftp_nlb.dns_name ]
+  records = [ aws_transfer_server.transfer_server.endpoint ]
 }
 
 

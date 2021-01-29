@@ -1,11 +1,13 @@
-# IAM
+###########
+# DATA
+###########
 data "aws_iam_policy_document" "transfer_server_assume_role" {
   statement {
-    effect  = "Allow"
-    actions = ["sts:AssumeRole"]
+    effect       = "Allow"
+    actions      = ["sts:AssumeRole"]
 
     principals {
-      type        = "Service"
+      type       = "Service"
       identifiers = ["transfer.amazonaws.com"]
     }
   }
@@ -13,8 +15,8 @@ data "aws_iam_policy_document" "transfer_server_assume_role" {
 
 data "aws_iam_policy_document" "transfer_server_assume_policy" {
   statement {
-    effect = "Allow"
-    actions = [
+    effect   = "Allow"
+    actions  = [
       "s3:DeleteObject",
       "s3:DeleteObjectVersion",
       "s3:GetBucketLocation",
@@ -32,9 +34,9 @@ data "aws_iam_policy_document" "transfer_server_assume_policy" {
 
 data "aws_iam_policy_document" "transfer_server_to_cloudwatch_assume_policy" {
   statement {
-    effect = "Allow"
+    effect    = "Allow"
 
-    actions = [
+    actions   = [
       "logs:CreateLogGroup",
       "logs:CreateLogStream",
       "logs:PutLogEvents",
@@ -44,6 +46,23 @@ data "aws_iam_policy_document" "transfer_server_to_cloudwatch_assume_policy" {
   }
 }
 
+data "aws_eip" "eip1_data" {
+  depends_on = [ aws_transfer_server.transfer_server, aws_eip.sftp_eip1 ]
+  tags       = {
+    Name     = "sftp_eip1"
+  }
+}
+
+data "aws_eip" "eip2_data" {
+  depends_on = [ aws_transfer_server.transfer_server, aws_eip.sftp_eip2 ]
+  tags       = {
+    Name     = "sftp_eip2"
+  }
+}
+
+###########
+# RESOURCES
+###########
 resource "aws_security_group" "sftp_securitygroup" {
   name          = "sftp_securitygroup"
   vpc_id        = var.VPC_ID
@@ -74,6 +93,7 @@ resource "aws_iam_role" "transfer_server_role" {
   }
 }
 
+
 resource "aws_iam_role_policy" "transfer_server_policy" {
   name   = "${var.TRANSFER_SERVER_NAME}-transfer_server_policy"
   role   = aws_iam_role.transfer_server_role.name
@@ -88,36 +108,20 @@ resource "aws_iam_role_policy" "transfer_server_to_cloudwatch_policy" {
 
 # SFTP Server
 resource "aws_transfer_server" "transfer_server" {
-  identity_provider_type = var.SFTP_IDENTITY_PROVIDER_TYPE
-  logging_role           = aws_iam_role.transfer_server_role.arn
-  endpoint_type          = "VPC"
-  #endpoint_type          = "VPC_ENDPOINT"
+  identity_provider_type   = var.SFTP_IDENTITY_PROVIDER_TYPE
+  logging_role             = aws_iam_role.transfer_server_role.arn
+  endpoint_type            = "VPC"
 
   endpoint_details {
-    address_allocation_ids = [ aws_eip.sftp_eip1.id, aws_eip.sftp_eip2.id]
+    address_allocation_ids = [ aws_eip.sftp_eip1.id, aws_eip.sftp_eip2.id ]
     subnet_ids             = [ var.SUBNET1, var.SUBNET2 ]
     vpc_id                 = var.VPC_ID
-  #security_group_ids     = [ aws_security_group.sftp_securitygroup.id ]
-  #vpc_endpoint_id      = aws_vpc_endpoint.sftp_server_interface_endpoint.id
   }
   tags                     = {
     Project                = "peter-sftp-tf"
     Name                   = "peter-sftp"
   }
 }
-
-# SFTP Server's Interface Endpoint
-# resource "aws_vpc_endpoint" "sftp_server_interface_endpoint" {
-#   vpc_id              = var.VPC_ID
-#   service_name        = "com.amazonaws.us-east-1.transfer.server"
-#   vpc_endpoint_type   = "Interface"
-#   private_dns_enabled = true
-#   subnet_ids          = [ var.SUBNET1, var.SUBNET2 ]
-#   security_group_ids  = [ aws_security_group.sftp_securitygroup.id ]
-#   tags                = {
-#     Project           = "peter-sftp-tf"
-#   }
-# }
 
 resource "aws_transfer_user" "transfer_server_users" {
   count          = length(var.TRANSFER_SERVER_USERS)
@@ -147,28 +151,28 @@ resource "aws_route53_record" "cname-record" {
   name    = "test"
   type    = "CNAME"
   ttl     = "300"
-  records = [ aws_eip.sftp_eip1.public_ip, aws_eip.sftp_eip2.public_ip ]
+  records = [ aws_transfer_server.transfer_server.endpoint ]
 }
 
 
 # NLB
 resource "aws_lb" "sftp_nlb" {
-  name               = "sftp-nlb"
-  internal           = false
-  load_balancer_type = "network"
+  name                       = "sftp-nlb"
+  internal                   = false
+  load_balancer_type         = "network"
   enable_deletion_protection = false
-  subnets            = [ var.SUBNET1, var.SUBNET2 ]
+  subnets                    = [ var.SUBNET1, var.SUBNET2 ]
   tags = {
-    Project          = "peter-sftp-tf"
+    Project                  = "peter-sftp-tf"
   }
 }
 
 resource "aws_lb_target_group" "nlb_target_group" {
-  name        = "nlb-target-group"
-  port        = 22
-  protocol    = "TCP"
-  target_type = "ip"
-  vpc_id      = var.VPC_ID
+  name                 = "nlb-target-group"
+  port                 = 22
+  protocol             = "TCP"
+  target_type          = "ip"
+  vpc_id               = var.VPC_ID
   deregistration_delay = 3600
 }
 
@@ -182,53 +186,30 @@ resource "aws_lb_listener" "nlb_listener" {
   }
 }
 
-# ENI
-resource "aws_network_interface" "eni1" {
-  subnet_id       = var.SUBNET1
-  private_ips     = [ var.PRIVATE_IP1 ]
-  security_groups = [ aws_security_group.sftp_securitygroup.id ]
-  tags            = {
-    Project       = "peter-sftp-tf"
-    Name          = "sftp-eni1"
-  }
-}
-
-resource "aws_network_interface" "eni2" {
-  subnet_id       = var.SUBNET2
-  private_ips     = [ var.PRIVATE_IP2 ]
-  security_groups = [ aws_security_group.sftp_securitygroup.id ]
-  tags            = {
-    Project       = "peter-sftp-tf"
-    Name          = "sftp-eni2"
-  }
-}
-
-
 # EIP
 resource "aws_eip" "sftp_eip1" {
-  vpc                       = true
-  associate_with_private_ip = var.PRIVATE_IP1
-  tags                      = {
-    Project                 = "peter-sftp-tf"
-    Name                    = "sftp_eip1"
+  vpc       = true
+  tags      = {
+    Project = "peter-sftp-tf"
+    Name    = "sftp_eip1"
   }
 }
 
 resource "aws_eip" "sftp_eip2" {
   vpc       = true
-  associate_with_private_ip = var.PRIVATE_IP2
   tags      = {
     Project = "peter-sftp-tf"
     Name    = "sftp_eip2"
   }
 }
 
+# NLB TG Attachments
 resource "aws_lb_target_group_attachment" "nlb_tg1_private_attachment" {
   target_group_arn = aws_lb_target_group.nlb_target_group.arn
-  target_id        = var.PRIVATE_IP1
+  target_id        =   data.aws_eip.eip1_data.private_ip
 }
 
 resource "aws_lb_target_group_attachment" "nlb_tg2_private_attachment" {
   target_group_arn = aws_lb_target_group.nlb_target_group.arn
-  target_id        = var.PRIVATE_IP2
+  target_id        = data.aws_eip.eip2_data.private_ip
 }
